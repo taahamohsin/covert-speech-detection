@@ -1,0 +1,52 @@
+reddit:
+  client_id: "REDDIT_CLIENT_ID"
+  client_secret: "REDDIT_CLIENT_SECRET"
+  user_agent: "covert-speech-detection/1.0 by u/CommercialMatter5736"
+  rate_limit_per_minute: 100
+
+subreddits:
+  polarized:
+    - conspiracy
+    - Firearms
+    - PoliticalCompassMemes
+    - kotakuinaction
+    - Conservative
+    - PublicFreakout
+  control:
+    - AskHistorians
+    - science
+    - explainlikeimfive
+    - todayilearned
+
+collection:
+  sort_methods:
+    - hot
+    - top
+    - controversial
+  time_filters:          # only used for 'top' and 'controversial'
+    - month
+    - year
+  limit_per_sort: 200    # posts per subreddit per sort method
+  comment_limit: 10      # top-level comments per post
+  target_total: 3000     # soft cap on total items
+
+output:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  format: csv            # csv or json
+
+arctic_shift:
+  base_url: "https://arctic-shift.photon-reddit.com"
+  posts_per_subreddit: 300       # per subreddit
+  comments_per_post: 10          # top-level comments per post
+  date_after: "2024-01-01"       # lookback window start
+  date_before: "2026-04-05"      # lookback window end
+  rate_limit_backoff_seconds: 2  # sleep when X-RateLimit-Remaining < 10
+
+apis:
+  perspective:
+    key: "PERSPECTIVE_API_KEY"
+    threshold: 0.7
+    qps: 50
+  openai:
+    key: "OPENAI_API_KEY"
