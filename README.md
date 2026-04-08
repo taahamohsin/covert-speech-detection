@@ -1,6 +1,6 @@
 # Between the Lines: Measuring the Detection Gap for Covert Hate Speech on Reddit
 
-**NYU Tandon - CS-GY 9223 (Trust & Safety, Spring 2026)**
+**NYU - CS-GY 9223 (Trust & Safety, Spring 2026)**
 **Instructor:** Dr. Rosanna Bellini
 
 ---
@@ -9,9 +9,9 @@
 
 This project audits how well off-the-shelf content moderation APIs detect covert hate speech on Reddit - content that uses dogwhistles, leetspeak, emoji encoding, Unicode homoglyphs, and other evasion strategies to avoid automated detection.
 
-It is not a new classifier. Instead, it:
-1. Measures the detection gap between human-annotated ground truth and API outputs
-2. Builds a preprocessing normalization layer to close that gap
+Importantly, this is not a new classifier. We are:
+1. Measuring the detection gap between human-annotated ground truth and API outputs
+2. Building a preprocessing normalization layer to close that gap
 
 ---
 
@@ -25,9 +25,9 @@ It is not a new classifier. Instead, it:
 
 ## Team
 
-- Taaha Bin Mohsin - MS CS
-- Amory Gao - BS/MS CS
-- Mohamed El Atoubi - PhD Cybersecurity
+- Taaha Bin Mohsin
+- Amory Gao
+- Mohamed El Atoubi
 
 ---
 
@@ -37,45 +37,70 @@ It is not a new classifier. Instead, it:
 pip install -r requirements.txt
 ```
 
-Copy `config/config.yaml` and fill in your API keys before running any scripts. Contact Taaha at taahabmohsin@hotmail.com if you believe you should have access to the credentials but do not.
+Copy `config/config.yaml` and fill in your API credentials before running any scripts. Contact Taaha (taahabmohsin@hotmail.com) if you need access to credentials.
+
+---
+
+## Current Status
+
+| Component | Status |
+|---|---|
+| Component 1 — Data Collection | Complete (8,720 items across 10 subreddits) |
+| Component 2 — API Baseline Detection | In progress |
+| Component 3 — Normalization Layer | Not started |
+| Human Annotation | Not started |
+| Evaluation | Not started |
 
 ---
 
 ## Pipeline
 
-### Component 1 - Data Collection
+### Component 1 — Data Collection
 
-Collects posts and top-level comments from polarized and control subreddits.
+Collects posts and top-level comments from polarized and control subreddits via [Arctic Shift](https://arctic-shift.photon-reddit.com) (no API key required). Drop-in replacement with PRAW once credentials are approved.
 
-**Interim (no credentials needed):**
 ```bash
-python src/collection/collect_arctic_shift.py --config config/config.yaml
-```
-Uses the [Arctic Shift](https://arctic-shift.photon-reddit.com) public Reddit archive — no API key required.
-
-**When PRAW credentials are approved:**
-```bash
-python src/collection/collect_reddit.py --config config/config.yaml
+python3 src/collection/collect_arctic_shift.py --config config/config.yaml
 ```
 
 Output: `data/raw/reddit_raw_<timestamp>.csv` and `.json`
+
+**Subreddits:**
+
+| Type | Communities |
+|---|---|
+| Polarized | r/conspiracy, r/Firearms, r/PoliticalCompassMemes, r/KotakuInAction, r/Conservative, r/PublicFreakout |
+| Control | r/AskHistorians, r/science, r/explainlikeimfive, r/todayilearned |
 
 ---
 
 ### Component 2 - API Baseline Detection
 
-Passes collected items through:
-- **Google Perspective API** — toxicity, identity_attack, insult, threat (threshold: 0.7)
-- **OpenAI Moderation API** — hate, harassment, self-harm categories
-
+**Google Perspective API** (service account auth) — TOXICITY, SEVERE_TOXICITY, IDENTITY_ATTACK, INSULT, THREAT scores (flag threshold: 0.7):
 ```bash
-python src/detection/perspective.py --input data/raw/<file>.csv
-python src/detection/openai_mod.py --input data/raw/<file>.csv
+python3 src/detection/perspective.py \
+  --input data/raw/<file>.csv \
+  --output data/processed/perspective_scored.csv
+```
+
+**OpenAI Moderation API** (Batch API) — hate, harassment, violence, illicit categories:
+```bash
+# Submit batch job (handles rate limits automatically)
+python3 src/detection/openai_mod.py \
+  --input data/raw/<file>.csv \
+  --output data/processed/openai_scored.csv
+
+# Parse results and retry failures
+python3 src/detection/parse_and_retry_batch.py \
+  --input data/raw/<file>.csv \
+  --output-file batch_<id>_output.jsonl \
+  --error-file batch_<id>_error.jsonl \
+  --state data/processed/openai_state.json
 ```
 
 ---
 
-### Component 3 - Normalization Layer
+### Component 3 — Normalization Layer
 
 Preprocesses text before re-running through APIs:
 - Leetspeak decoder (`1→l`, `3→e`, `0→o`)
@@ -84,7 +109,9 @@ Preprocesses text before re-running through APIs:
 - Pattern rules: asterisk censoring, emoji substitutions, deliberate misspellings
 
 ```bash
-python src/normalization/pipeline.py --input data/raw/<file>.csv --output data/processed/<file>.csv
+python3 src/normalization/pipeline.py \
+  --input data/raw/<file>.csv \
+  --output data/processed/normalized.csv
 ```
 
 ---
@@ -98,15 +125,17 @@ Computes precision, recall, and F1 against human-annotated gold standard across 
 - OpenAI + normalization
 
 ```bash
-python src/evaluation/metrics.py --annotations data/annotations/<file>.csv --predictions data/processed/<file>.csv
+python3 src/evaluation/metrics.py \
+  --annotations data/annotations/<file>.csv \
+  --predictions data/processed/<file>.csv
 ```
 
 ---
 
 ## Key References
 
-- Gorwa et al. (2020) - Algorithmic content moderation
-- Mendelsohn et al. (2023) - Dogwhistle glossary (300+ terms)
-- Sasse et al. (2023) - Emergent dogwhistles
-- Gröndahl et al. (2018) - Adversarial attacks on toxicity classifiers
-- Thomas et al. (2021) - Hate & harassment taxonomy
+- Gorwa et al. (2020) — Algorithmic content moderation
+- Mendelsohn et al. (2023) — Dogwhistle glossary (300+ terms)
+- Sasse et al. (2023) — Emergent dogwhistles
+- Gröndahl et al. (2018) — Adversarial attacks on toxicity classifiers
+- Thomas et al. (2021) — Hate & harassment taxonomy
