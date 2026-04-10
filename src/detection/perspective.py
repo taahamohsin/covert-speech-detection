@@ -41,7 +41,7 @@ class TokenBucket:
 
     def __init__(self, rate_per_minute: int):
         self._capacity = rate_per_minute
-        self._tokens = rate_per_minute
+        self._tokens = 1  # start near-empty to prevent burst at startup
         self._refill_rate = rate_per_minute / 60.0  # tokens per second
         self._last = time.monotonic()
         self._lock = threading.Lock()
