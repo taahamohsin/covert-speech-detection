@@ -66,14 +66,22 @@ def run(input_csv: str, scored_csv: str, rate: float, config_path: str) -> None:
     # Load scored CSV
     with open(scored_csv, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
+        fieldnames = list(reader.fieldnames)
         rows = list(reader)
+
+    # Add score columns if bootstrapping from a file that doesn't have them yet
+    for col in SCORE_COLS:
+        if col not in fieldnames:
+            fieldnames.append(col)
+            for row in rows:
+                row[col] = ""
 
     # Find null rows
     null_indices = [
-        i for i, row in enumerate(rows)
+        i
+        for i, row in enumerate(rows)
         if not row.get("openai_flagged", "").strip()
-        or row["openai_flagged"].strip() == "None"
+        or row.get("openai_flagged", "").strip() == "None"
     ]
     log.info("Found %d rows still needing scores", len(null_indices))
 
@@ -100,8 +108,14 @@ def run(input_csv: str, scored_csv: str, rate: float, config_path: str) -> None:
                     flagged += 1
                 break
             except Exception as e:
-                if "429" in str(e) or "Too Many Requests" in str(e) or "RateLimitError" in type(e).__name__:
-                    log.warning("429 on row %d — waiting %ds before retry", idx, backoff)
+                if (
+                    "429" in str(e)
+                    or "Too Many Requests" in str(e)
+                    or "RateLimitError" in type(e).__name__
+                ):
+                    log.warning(
+                        "429 on row %d — waiting %ds before retry", idx, backoff
+                    )
                     time.sleep(backoff)
                     backoff = min(backoff * 2, 120)
                 else:
@@ -113,7 +127,10 @@ def run(input_csv: str, scored_csv: str, rate: float, config_path: str) -> None:
             _write_csv(scored_csv, fieldnames, rows)
             log.info(
                 "Progress: %d/%d scored | flagged: %d | errors: %d",
-                pos, len(null_indices), flagged, errors,
+                pos,
+                len(null_indices),
+                flagged,
+                errors,
             )
 
         time.sleep(delay)
@@ -134,7 +151,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
     parser.add_argument("--scored", required=True)
-    parser.add_argument("--rate", type=float, default=3, help="Requests per second (default: 3)")
+    parser.add_argument(
+        "--rate", type=float, default=3, help="Requests per second (default: 3)"
+    )
     parser.add_argument("--config", default="config/config.yaml")
     args = parser.parse_args()
     run(args.input, args.scored, args.rate, args.config)

@@ -128,34 +128,65 @@ def run(input_path: str, output_path: str, config_path: str = "config/config.yam
     texts = df["text"].tolist()
     total = len(texts)
 
+    # Check for partially-scored output to resume from
+    score_cols = [f"perspective_{a.lower()}" for a in attributes] + ["perspective_flagged"]
+    if Path(output_path).exists():
+        existing = pd.read_csv(output_path)
+        already_scored = existing["perspective_flagged"].notna() if "perspective_flagged" in existing.columns else pd.Series([False] * len(existing))
+        skip_indices = set(existing.index[already_scored].tolist())
+        log.info("Resuming: %d already scored, %d remaining", len(skip_indices), total - len(skip_indices))
+    else:
+        skip_indices = set()
+
     results = [None] * total
-    completed = 0
+    # Pre-fill already-scored rows from existing output
+    if skip_indices:
+        for col in score_cols:
+            if col in existing.columns:
+                pass  # will be reloaded below
+        for idx in skip_indices:
+            row = {}
+            for col in score_cols:
+                if col in existing.columns:
+                    row[col.replace("perspective_", "")] = existing.at[idx, col]
+            results[idx] = row
+
+    completed = len(skip_indices)
+    save_every = 100
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
+    def _flush(results_so_far: list, df: pd.DataFrame, output_path: str) -> None:
+        filled = [r if r is not None else {} for r in results_so_far]
+        scores_df = pd.DataFrame(filled)
+        if scores_df.empty:
+            return
+        scores_df.columns = [f"perspective_{c}" if not c.startswith("perspective_") else c for c in scores_df.columns]
+        if "perspective_flagged" not in scores_df.columns:
+            tox = scores_df.get("perspective_toxicity", pd.Series(0.0))
+            ia  = scores_df.get("perspective_identity_attack", pd.Series(0.0))
+            scores_df["perspective_flagged"] = (tox >= FLAGGED_THRESHOLD) | (ia >= FLAGGED_THRESHOLD)
+        out = pd.concat([df.reset_index(drop=True), scores_df], axis=1)
+        out.to_csv(output_path, index=False)
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(analyze_text, i, text, attributes, creds, bucket): i
             for i, text in enumerate(texts)
+            if i not in skip_indices
         }
         for future in as_completed(futures):
             idx, scores = future.result()
             results[idx] = scores
             completed += 1
-            if completed % 100 == 0:
-                log.info("  Progress: %d/%d items scored", completed, total)
+            if completed % save_every == 0:
+                _flush(results, df, output_path)
+                log.info("  Progress: %d/%d items scored (checkpoint saved)", completed, total)
 
-    scores_df = pd.DataFrame(results)
-    scores_df.columns = [f"perspective_{c}" for c in scores_df.columns]
+    # Final flush
+    _flush(results, df, output_path)
 
-    scores_df["perspective_flagged"] = (
-        scores_df.get("perspective_toxicity", pd.Series(0.0)) >= FLAGGED_THRESHOLD
-    ) | (
-        scores_df.get("perspective_identity_attack", pd.Series(0.0)) >= FLAGGED_THRESHOLD
-    )
-
-    out_df = pd.concat([df.reset_index(drop=True), scores_df], axis=1)
-
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    out_df.to_csv(output_path, index=False)
+    out_df = pd.read_csv(output_path)
     log.info("Saved %d scored items to %s", len(out_df), output_path)
     log.info(
         "Flagged: %d / %d (%.1f%%)",
