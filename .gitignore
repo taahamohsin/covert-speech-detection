@@ -1,0 +1,22 @@
+# Credentials — never commit these
+config/config.yaml
+config/service_account.json
+*.json
+
+# Keep lexicons
+!data/lexicons/
+
+# Collected data (large, potentially sensitive)
+data/raw/
+data/processed/
+data/annotations/
+
+# Python
+__pycache__/
+*.pyc
+.env
+*.egg-info/
+dist/
+
+# Notebooks
+notebooks/.ipynb_checkpoints/
