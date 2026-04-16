@@ -1,4 +1,6 @@
-# Between the Lines: Measuring the Detection Gap for Covert Hate Speech on Reddit
+# Speaking in Code: Automated Detection of Dogwhistle Language and Covert Hate Speech on Reddit
+
+**NYU - CS-GY 9223 (Trust & Safety, Spring 2026)**
 
 NYU Tandon - CS-GY 9223 (Trust & Safety, Spring 2026)
 Instructor: Dr. Rosanna Bellini
@@ -26,9 +28,9 @@ We are not building a new classifier. We are:
 
 ## Team
 
-- Taaha Bin Mohsin (tb3486) - Pipeline development, normalization layer, API integration, cloud scoring infrastructure, evaluation framework
-- Amory Gao (axg212) - Data collection, sampling strategy, statistical analysis, visualizations
-- Mohamed El Atoubi (me2890) - Research design, dogwhistle lexicon curation, annotation codebook, lead annotator, report writing
+- Taaha Bin Mohsin
+- Amory Gao
+- Mohamed El Atoubi
 
 ---
 
@@ -38,7 +40,38 @@ We are not building a new classifier. We are:
 pip install -r requirements.txt
 ```
 
-Copy `config/config.yaml` and fill in your API keys before running any scripts. Contact Taaha at taahabmohsin@hotmail.com if you believe you should have access to the credentials but do not.
+Copy `config/config.yaml` and fill in your API credentials before running any scripts.
+
+> **Note:** Raw data and scored CSVs are not committed to this repository for data privacy and Reddit ToS-compliance reasons (see `.gitignore`). Run the collection and detection scripts to reproduce them.
+
+---
+
+## Current Status
+
+| Component | Status |
+|---|---|
+| Data Collection (8,720 items) | Complete |
+| Perspective API scoring | Complete (8,720/8,720) |
+| OpenAI Moderation API scoring - raw text | Complete (8,720/8,720) |
+| Normalization pipeline | Complete |
+| OpenAI Moderation API scoring - normalized text | 84.9% complete (7,404/8,720) |
+| Dogwhistle lexicon (~50 terms) | Complete |
+| Annotation codebook | Complete |
+| Human annotation - pilot round (75 items) | Complete (calibration failure; see below) |
+| Human annotation - revised sample (50 items) | Ready for re-annotation |
+| Detection gap analysis | Pending gold standard |
+| Evaluation (precision/recall/F1) | Pending gold standard |
+
+### Preliminary Detection Gap
+
+On the raw corpus (8,720 items, no normalization applied):
+
+| | Perspective API | OpenAI Moderation |
+|---|---|---|
+| All items | 2.1% flagged (186) | 9.6% flagged (835) |
+| Polarized subreddits only | 3.1% flagged (172/5,588) | 13.3% flagged (742/5,588) |
+
+702 items are flagged by OpenAI but missed by Perspective. Only 53 are flagged by Perspective but missed by OpenAI.
 
 ---
 

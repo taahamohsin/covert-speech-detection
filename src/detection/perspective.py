@@ -51,7 +51,9 @@ class TokenBucket:
             with self._lock:
                 now = time.monotonic()
                 elapsed = now - self._last
-                self._tokens = min(self._capacity, self._tokens + elapsed * self._refill_rate)
+                self._tokens = min(
+                    self._capacity, self._tokens + elapsed * self._refill_rate
+                )
                 self._last = now
                 if self._tokens >= 1:
                     self._tokens -= 1
@@ -90,7 +92,9 @@ def analyze_text(
     delay = 5.0
     while True:
         try:
-            resp = requests.post(PERSPECTIVE_URL, json=body, headers=headers, timeout=15)
+            resp = requests.post(
+                PERSPECTIVE_URL, json=body, headers=headers, timeout=15
+            )
             if resp.status_code == 429:
                 log.warning("Item %d: 429 hit, backing off %.1fs", idx, delay)
                 time.sleep(delay)
@@ -110,7 +114,9 @@ def analyze_text(
             return idx, {attr.lower(): None for attr in attributes}
 
 
-def run(input_path: str, output_path: str, config_path: str = "config/config.yaml") -> None:
+def run(
+    input_path: str, output_path: str, config_path: str = "config/config.yaml"
+) -> None:
     cfg = load_config(config_path)
     pcfg = cfg["apis"]["perspective"]
     attributes = pcfg["attributes"]
@@ -122,19 +128,34 @@ def run(input_path: str, output_path: str, config_path: str = "config/config.yam
 
     df = pd.read_csv(input_path)
     log.info("Loaded %d items from %s", len(df), input_path)
-    log.info("Rate limit: %d RPM, %d workers — est. %.0f min", rpm, max_workers, len(df) / rpm)
+    log.info(
+        "Rate limit: %d RPM, %d workers — est. %.0f min",
+        rpm,
+        max_workers,
+        len(df) / rpm,
+    )
 
     df["text"] = df["text"].fillna("").astype(str)
     texts = df["text"].tolist()
     total = len(texts)
 
     # Check for partially-scored output to resume from
-    score_cols = [f"perspective_{a.lower()}" for a in attributes] + ["perspective_flagged"]
+    score_cols = [f"perspective_{a.lower()}" for a in attributes] + [
+        "perspective_flagged"
+    ]
     if Path(output_path).exists():
         existing = pd.read_csv(output_path)
-        already_scored = existing["perspective_flagged"].notna() if "perspective_flagged" in existing.columns else pd.Series([False] * len(existing))
+        already_scored = (
+            existing["perspective_flagged"].notna()
+            if "perspective_flagged" in existing.columns
+            else pd.Series([False] * len(existing))
+        )
         skip_indices = set(existing.index[already_scored].tolist())
-        log.info("Resuming: %d already scored, %d remaining", len(skip_indices), total - len(skip_indices))
+        log.info(
+            "Resuming: %d already scored, %d remaining",
+            len(skip_indices),
+            total - len(skip_indices),
+        )
     else:
         skip_indices = set()
 
@@ -161,11 +182,16 @@ def run(input_path: str, output_path: str, config_path: str = "config/config.yam
         scores_df = pd.DataFrame(filled)
         if scores_df.empty:
             return
-        scores_df.columns = [f"perspective_{c}" if not c.startswith("perspective_") else c for c in scores_df.columns]
+        scores_df.columns = [
+            f"perspective_{c}" if not c.startswith("perspective_") else c
+            for c in scores_df.columns
+        ]
         if "perspective_flagged" not in scores_df.columns:
             tox = scores_df.get("perspective_toxicity", pd.Series(0.0))
-            ia  = scores_df.get("perspective_identity_attack", pd.Series(0.0))
-            scores_df["perspective_flagged"] = (tox >= FLAGGED_THRESHOLD) | (ia >= FLAGGED_THRESHOLD)
+            ia = scores_df.get("perspective_identity_attack", pd.Series(0.0))
+            scores_df["perspective_flagged"] = (tox >= FLAGGED_THRESHOLD) | (
+                ia >= FLAGGED_THRESHOLD
+            )
         out = pd.concat([df.reset_index(drop=True), scores_df], axis=1)
         out.to_csv(output_path, index=False)
 
@@ -181,7 +207,11 @@ def run(input_path: str, output_path: str, config_path: str = "config/config.yam
             completed += 1
             if completed % save_every == 0:
                 _flush(results, df, output_path)
-                log.info("  Progress: %d/%d items scored (checkpoint saved)", completed, total)
+                log.info(
+                    "  Progress: %d/%d items scored (checkpoint saved)",
+                    completed,
+                    total,
+                )
 
     # Final flush
     _flush(results, df, output_path)
@@ -197,7 +227,9 @@ def run(input_path: str, output_path: str, config_path: str = "config/config.yam
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run Perspective API on collected data.")
+    parser = argparse.ArgumentParser(
+        description="Run Perspective API on collected data."
+    )
     parser.add_argument("--input", required=True, help="Path to raw CSV")
     parser.add_argument("--output", required=True, help="Path to write scored CSV")
     parser.add_argument("--config", default="config/config.yaml")
