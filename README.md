@@ -86,7 +86,7 @@ The original corpus turned out to be nearly entirely benign - "hot" and "top" Re
 - 6,462 items across three strata:
   - A_dogwhistle (5,622 items) - matched dogwhistle lexicon
   - B_normalized (340 items) - normalization changed the text
-  - C_banned_control (500 items) - random banned-sub content, no heuristic match
+  - C_banned_control (500 items) - control group, no heuristic match
 - 87% of items hit the dogwhistle lexicon vs. 1.9% in the original corpus
 - All four detection conditions run on this corpus
 - Final artifact: `data/processed/detection_results_final.csv` (6,462 rows, 39 columns)
@@ -175,7 +175,7 @@ By stratum:
 |---------|-------|--------|-------------|
 | A - dogwhistle-flagged | 5,622 | 38.9% | 5.2% |
 | B - normalization-changed | 340 | 34.1% | 6.9% |
-| C - banned sub control | 500 | 24.0% | 6.5% |
+| C - control group | 500 | 24.0% | 6.5% |
 
 ---
 
