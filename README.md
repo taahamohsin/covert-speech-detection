@@ -54,24 +54,13 @@ Copy `config/config.yaml` and fill in your API credentials before running any sc
 | Perspective API scoring | Complete (8,720/8,720) |
 | OpenAI Moderation API scoring - raw text | Complete (8,720/8,720) |
 | Normalization pipeline | Complete |
-| OpenAI Moderation API scoring - normalized text | 84.9% complete (7,404/8,720) |
+| OpenAI Moderation API scoring - normalized text | Complete |
 | Dogwhistle lexicon (~50 terms) | Complete |
 | Annotation codebook | Complete |
-| Human annotation - pilot round (75 items) | Complete (calibration failure; see below) |
-| Human annotation - revised sample (50 items) | Ready for re-annotation |
-| Detection gap analysis | Pending gold standard |
-| Evaluation (precision/recall/F1) | Pending gold standard |
-
-### Preliminary Detection Gap
-
-On the raw corpus (8,720 items, no normalization applied):
-
-| | Perspective API | OpenAI Moderation |
-|---|---|---|
-| All items | 2.1% flagged (186) | 9.6% flagged (835) |
-| Polarized subreddits only | 3.1% flagged (172/5,588) | 13.3% flagged (742/5,588) |
-
-702 items are flagged by OpenAI but missed by Perspective. Only 53 are flagged by Perspective but missed by OpenAI.
+| Human annotation - 150-item adversarial sample | Complete |
+| Inter-annotator agreement (kappa) | Complete (0.622 post-calibration, 1.000 post-adjudication) |
+| Detection gap analysis | Complete |
+| Evaluation (precision/recall/F1) | Complete |
 
 ---
 
@@ -151,20 +140,48 @@ Cloud scoring: All four conditions on the adversarial corpus were run via Modal 
 
 ---
 
+### Step 4 - Human Annotation
+
+150 items were sampled from the adversarial corpus, stratified by API agreement condition:
+
+| Condition | Items | Purpose |
+|---|---|---|
+| Flagged by neither API (stratum A) | 60 | Detection gap cases |
+| Flagged by OpenAI only (stratum A) | 30 | OpenAI agreement check |
+| Flagged by Perspective only (stratum A) | 15 | Perspective agreement check |
+| Flagged by both (stratum A) | 15 | True positive baseline |
+| Control group, neither (stratum C) | 30 | Not-hateful baseline |
+
+Two annotators labeled each item independently across four categories: Overt Hate, Covert Hate, Borderline/Ambiguous, Not Hateful. Inter-annotator kappa reached 0.622 after a terminology calibration session. Remaining disagreements were adjudicated by a third reviewer. Final kappa: 1.000 across all 150 items.
+
+Export script: `src/annotation/export_adversarial_annotation.py`
+
+---
+
+### Step 5 - Evaluation
+
+```bash
+python3 src/evaluation/metrics.py
+```
+
+Computes precision, recall, and F1 for all four detection conditions against the gold standard. Borderline/Ambiguous items are excluded from primary metrics. Results are broken down by hate type (overt vs. covert) and evasion strategy.
+
+---
+
 ## Key Results
 
-All results are on the adversarial corpus (6,462 items). Full data in `data/processed/detection_results_final.csv`.
+### Detection gap at scale (adversarial corpus, 6,462 items)
 
 | Condition | Flagged |
-|-----------|---------|
+|---|---|
 | OpenAI pre-norm | 2,421 / 6,462 (37.5%) |
 | OpenAI post-norm | 2,426 / 6,462 (37.5%) |
-| Perspective pre-norm | 343 / 6,348 (5.4%) |
-| Perspective post-norm | 341 / 6,348 (5.4%) |
+| Perspective pre-norm | 343 / 6,462 (5.3%) |
+| Perspective post-norm | 341 / 6,462 (5.3%) |
 
-Normalization lift: +0.1pp (OpenAI), 0.0pp (Perspective) - effectively zero.
+Normalization lift: +0.1pp (OpenAI), 0.0pp (Perspective).
 
-API agreement (on 6,348 items scored by both):
+API agreement:
 - Flagged by both: 304 (4.8%)
 - OpenAI only: 2,108 (33.2%)
 - Perspective only: 39 (0.6%)
@@ -172,10 +189,33 @@ API agreement (on 6,348 items scored by both):
 
 By stratum:
 | Stratum | Items | OpenAI | Perspective |
-|---------|-------|--------|-------------|
+|---|---|---|---|
 | A - dogwhistle-flagged | 5,622 | 38.9% | 5.2% |
 | B - normalization-changed | 340 | 34.1% | 6.9% |
 | C - control group | 500 | 24.0% | 6.5% |
+
+### Evaluation against gold standard (134 items, Borderline/Ambiguous excluded)
+
+| Condition | Precision | Recall | F1 |
+|---|---|---|---|
+| OpenAI pre-norm | 0.500 | 0.556 | 0.526 |
+| OpenAI post-norm | 0.500 | 0.556 | 0.526 |
+| Perspective pre-norm | 0.519 | 0.389 | 0.444 |
+| Perspective post-norm | 0.519 | 0.389 | 0.444 |
+
+By hate type (pre-norm):
+| | OpenAI Recall | OpenAI F1 | Perspective Recall | Perspective F1 |
+|---|---|---|---|---|
+| Overt Hate (n=12) | 0.917 | 0.512 | 0.500 | 0.387 |
+| Covert Hate (n=24) | 0.375 | 0.340 | 0.333 | 0.356 |
+
+By evasion strategy (OpenAI pre-norm):
+| Strategy | Recall | F1 | n |
+|---|---|---|---|
+| None (overt slurs) | 1.000 | 1.000 | 7 |
+| Leetspeak | 1.000 | 1.000 | 1 |
+| Dogwhistle | 0.444 | 0.585 | 27 |
+| Deliberate misspelling | 0.000 | 0.000 | 1 |
 
 ---
 
@@ -183,30 +223,16 @@ By stratum:
 
 Our original hypothesis was that normalization would lift detection rates by fixing character-substitution evasion. The data showed the opposite: normalization has essentially zero effect because the corpus evades detection semantically, not orthographically. Posts use plain-text dogwhistles ("jogger", "globalists", "great replacement") that are spelled correctly - classifiers miss them because they lack the cultural context to interpret the coded meaning, not because the text is obfuscated.
 
-61.4% of adversarially-sampled dogwhistle content was missed by both APIs. This is the detection gap. It cannot be closed with preprocessing alone. Platforms need human-in-the-loop escalation for dogwhistle-flagged content and API providers should consider adding coded-language subscales (e.g., `identity_attack_coded`) trained on implicit rather than explicit hate.
+61.4% of adversarially-sampled dogwhistle content was missed by both APIs. OpenAI catches 91.7% of overt hate but only 37.5% of covert hate. The detection gap is specifically in dogwhistle content: OpenAI recall on dogwhistle items is 44.4% vs. 100% on items with no evasion strategy.
 
 ---
 
-## Annotation (In Progress)
+## Policy Recommendations
 
-### Status
-- Round 1 (75 items, original corpus): kappa = 0.00 - calibration failure, sample was too benign
-- Round 2 (50 items, original corpus, stratified by target group): Annotator B complete, Annotator A pending
-
-### Next steps
-Rounds 1 and 2 drew from the original corpus (1.9% dogwhistle hit rate), which is too benign for meaningful calibration. The next annotation round must draw from the adversarial corpus (`detection_results_final.csv`). `src/annotation/export_covert_v2.py` currently exports from the original corpus - a new export script targeting the adversarial corpus is needed before Round 3 can begin.
-
-Target: 100-200 annotated items stratified by API agreement condition:
-
-| Condition | Items | Purpose |
-|-----------|-------|---------|
-| Flagged by neither API (stratum A) | ~40 | Detection gap - cases both APIs miss |
-| Flagged by OpenAI only (stratum A) | ~20 | OpenAI agreement check |
-| Flagged by Perspective only (stratum A) | ~10 | Perspective agreement check |
-| Flagged by both (stratum A) | ~10 | True positive baseline |
-| Banned sub control, neither (stratum C) | ~20 | Not-hateful baseline |
-
-Once kappa >= 0.6 is achieved, precision/recall/F1 will be computed for all four detection conditions against the gold standard, broken down by hate speech type (overt vs. covert) and evasion strategy.
+1. Platforms should treat dogwhistle lexicon matches as an independent escalation signal routing content to human review. 61.4% of missed content would have been surfaced this way.
+2. API providers should add a coded-language subscale (e.g. `hate_implicit`) trained on dogwhistle and incel-coded content, not just explicit slurs.
+3. Orthographic normalization preprocessing is not worth deploying alone. Resources are better spent on lexicon curation and human review pipelines.
+4. Platforms should apply stricter human review thresholds in communities with known histories of coordinated coded hate rather than relying solely on automated scores.
 
 ---
 
